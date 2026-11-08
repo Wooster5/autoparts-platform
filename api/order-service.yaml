@@ -1,1 +1,245 @@
+openapi: 3.1.0
+info:
+  title: Order Service API
+  version: 1.0.0
+  description: Управление заказами и оркестрация Саги оформления покупки.
+servers:
+  - url: https://api.partsflow.ru/orders
+    description: Вход через API Gateway
+  - url: http://order-service.internal:8080
+    description: Внутренний сервисный URL
 
+paths:
+  /api/v1/orders:
+    post:
+      summary: Создать новый заказ
+      description: Клиентский эндпоинт оформления заказа. Инициирует синхронную проверку и сагу.
+      tags:
+        - Public Orders
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Уникальный ключ идемпотентности клиентской операции
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Заказ успешно сформирован и ожидает оплаты
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestProblem'
+        '409':
+          description: Конфликт при резервации товара (товара нет в наличии)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+
+  /api/v1/orders/{id}:
+    get:
+      summary: Получить информацию о заказе
+      tags:
+        - Public Orders
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Детальная информация по заказу
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+
+  /internal/v1/orders/{id}/status:
+    patch:
+      summary: Внутреннее обновление статуса заказа
+      tags:
+        - internal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [PAID, CANCELLED, COMPLETED]
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Статус успешно обновлен
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+
+components:
+  schemas:
+    CreateOrderRequest:
+      type: object
+      required:
+        - deliveryAddress
+        - deliverySlotId
+        - items
+      properties:
+        deliveryAddress:
+          type: string
+          example: "г. Москва, ул. Тверская, д. 12, кв. 45"
+        deliverySlotId:
+          type: string
+          format: uuid
+          example: "a7c29e1e-45fa-4a57-8e6d-21e33b5c8911"
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/OrderItemRequest'
+
+    OrderItemRequest:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        quantity:
+          type: integer
+          minimum: 1
+          example: 2
+
+    OrderResponse:
+      type: object
+      required:
+        - orderId
+        - status
+        - totalAmount
+        - currency
+        - createdAt
+        - expiresAt
+        - items
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING_PAYMENT, PAID, CANCELLED, PROCESSING, IN_DELIVERY, COMPLETED]
+          example: "PENDING_PAYMENT"
+        totalAmount:
+          type: number
+          format: double
+          example: 14850.50
+        currency:
+          type: string
+          example: "RUB"
+        paymentUrl:
+          type: string
+          format: uri
+          example: "https://checkout.bank.ru/pay/3b999a41-11c9-4b32"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-11-06T12:15:00Z"
+        createdAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItemResponse'
+
+    OrderItemResponse:
+      type: object
+      required:
+        - productId
+        - title
+        - unitPrice
+        - quantity
+      properties:
+        productId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: "Тормозные колодки передние Brembo P85020"
+        unitPrice:
+          type: number
+          example: 4500.00
+        quantity:
+          type: integer
+          example: 2
+
+    ProblemDetails:
+      type: object
+      required:
+        - type
+        - title
+        - status
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "https://api.partsflow.ru/errors/out-of-stock"
+        title:
+          type: string
+          example: "Недостаточно товара на складе"
+        status:
+          type: integer
+          example: 409
+        detail:
+          type: string
+          example: "Товар Brembo P85020 доступен в количестве 1 шт., запрошено 2 шт."
+        instance:
+          type: string
+          example: "/api/v1/orders"
+
+  responses:
+    BadRequestProblem:
+      description: Невалидные параметры запроса
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFoundProblem:
+      description: Ресурс не найден
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    InternalServerErrorProblem:
+      description: Непредвиденный внутренний сбой
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
