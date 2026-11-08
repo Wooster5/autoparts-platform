@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Payment Service API
+  version: 1.0.0
+  description: Интеграция с банковским эквайрингом и проведение возвратов.
+servers:
+  - url: http://payment-service.internal:8082
+    description: Внутренний сервисный URL
+  - url: https://api.partsflow.ru/payments
+    description: Вход через Gateway для банковских вебхуков
+
+paths:
+  /internal/v1/payments:
+    post:
+      summary: Создать платежную транзакцию
+      tags:
+        - internal
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Платеж зарегистрирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSessionResponse'
+
+  /api/v1/payments/webhook:
+    post:
+      summary: Прием нотификации от банка
+      tags:
+        - Public Webhook
+      parameters:
+        - in: header
+          name: X-Signature-SHA256
+          required: true
+          schema:
+            type: string
+          description: Электронная подпись запроса платёжного шлюза
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BankWebhookRequest'
+      responses:
+        '200':
+          description: Вебхук принят и обработан
+
+  /internal/v1/payments/{paymentId}/refund:
+    post:
+      summary: Инициировать возврат средств (компенсирующее действие Саги)
+      tags:
+        - internal
+      parameters:
+        - in: path
+          name: paymentId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  example: "Отмена просроченного заказа"
+      responses:
+        '202':
+          description: Запрос на возврат передан в банк
+
+components:
+  schemas:
+    CreatePaymentRequest:
+      type: object
+      required: [orderId, amount, currency]
+      properties:
+        orderId: { type: string, format: uuid }
+        amount: { type: number, example: 14850.50 }
+        currency: { type: string, example: "RUB" }
+
+    PaymentSessionResponse:
+      type: object
+      required: [paymentId, orderId, paymentUrl, status]
+      properties:
+        paymentId: { type: string, format: uuid }
+        orderId: { type: string, format: uuid }
+        paymentUrl: { type: string, format: uri }
+        status: { type: string, enum: [PENDING, SUCCEEDED, FAILED, REFUNDED] }
+
+    BankWebhookRequest:
+      type: object
+      required: [transactionId, externalPaymentId, status, amount]
+      properties:
+        transactionId: { type: string }
+        externalPaymentId: { type: string, format: uuid }
+        status: { type: string, enum: [SUCCESS, DECLINED] }
+        amount: { type: number }
