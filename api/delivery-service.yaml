@@ -1,0 +1,60 @@
+openapi: 3.1.0
+info:
+  title: Delivery Service API
+  version: 1.0.0
+  description: Расчет доставки и управление отправлениями.
+servers:
+  - url: https://api.partsflow.ru/delivery
+  - url: http://delivery-service.internal:8084
+
+paths:
+  /internal/v1/shipments/quote:
+    post:
+      summary: Синхронный расчет тарифа и проверка тайм-слота
+      tags: [internal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [address, slotId]
+              properties:
+                address: { type: string }
+                slotId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Тариф рассчитан
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cost, estimatedDays]
+                properties:
+                  cost: { type: number, example: 350.00 }
+                  estimatedDays: { type: integer, example: 1 }
+
+  /api/v1/shipments/{id}/track:
+    get:
+      summary: Отслеживание статуса доставки клиентом
+      tags: [Public Delivery]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Текущий статус отправления
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [shipmentId, status, updatedAt]
+                properties:
+                  shipmentId: { type: string, format: uuid }
+                  status:
+                    type: string
+                    enum: [CREATED, COURIER_ASSIGNED, IN_TRANSIT, DELIVERED]
+                  courierPhone: { type: string, example: "+79991112233" }
+                  updatedAt: { type: string, format: date-time }
