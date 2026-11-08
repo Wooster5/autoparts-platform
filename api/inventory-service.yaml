@@ -1,0 +1,117 @@
+openapi: 3.1.0
+info:
+  title: Inventory Service API
+  version: 1.0.0
+  description: Управление складскими остатками и временными блокировками.
+servers:
+  - url: http://inventory-service.internal:8081
+    description: Внутренняя сеть сервисов
+
+paths:
+  /internal/v1/reservations:
+    post:
+      summary: Создать временную блокировку (резерв) остатков
+      tags:
+        - internal
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '201':
+          description: Резерв успешно зафиксирован
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '409':
+          description: Недостаточно свободного остатка
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+
+  /internal/v1/reservations/{reservationId}/release:
+    post:
+      summary: Досрочно освободить резерв (компенсация Саги)
+      tags:
+        - internal
+      parameters:
+        - in: path
+          name: reservationId
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Резерв освобожден
+
+components:
+  schemas:
+    CreateReservationRequest:
+      type: object
+      required:
+        - orderId
+        - ttlSeconds
+        - items
+      properties:
+        orderId:
+          type: string
+          format: uuid
+        ttlSeconds:
+          type: integer
+          default: 900
+          example: 900
+        items:
+          type: array
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId:
+                type: string
+                format: uuid
+              quantity:
+                type: integer
+                example: 2
+
+    ReservationResponse:
+      type: object
+      required:
+        - reservationId
+        - orderId
+        - status
+        - expiresAt
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [ACTIVE, DEDUCTED, RELEASED]
+          example: "ACTIVE"
+        expiresAt:
+          type: string
+          format: date-time
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status]
+      properties:
+        type: { type: string, format: uri }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
