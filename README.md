@@ -1,4 +1,4 @@
-<img width="6494" height="5555" alt="Untitled diagram-2026-11-06-152132" src="https://github.com/user-attachments/assets/bc71d467-8c5d-4f3a-afc4-9725dacf884c" /># Лабораторная работа №3. Декомпозиция и проектирование микросервисной системы «PartsFlow»
+Лабораторная работа №3. Декомпозиция и проектирование микросервисной системы «PartsFlow»
 
 ## 1. Анализ предметной области
 
@@ -153,8 +153,8 @@
 ### Архитектурная схема на уровне контейнеров
 Клиентские приложения взаимодействуют с системой исключительно через **API Gateway**. Внутренние вызовы между сервисами разделены на синхронные (REST по HTTP) и асинхронные (события через топики Apache Kafka).
 * Исходный файл схемы: [docs/architecture.drawio](docs/architecture.drawio)
-
-![Архитектурная схема системы](docs/Uploading Untitled diagram-2026-11-06-152132.png)
+<img width="6494" height="5555" alt="Untitled diagram-2026-11-06-152132" src="https://github.com/user-attachments/assets/bc71d467-8c5d-4f3a-afc4-9725dacf884c" />
+Архитектурная схема системы
 
 ### Таблица всех взаимодействий в системе
 
