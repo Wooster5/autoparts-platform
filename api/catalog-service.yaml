@@ -1,0 +1,83 @@
+openapi: 3.1.0
+info:
+  title: Catalog Service API
+  version: 1.0.0
+  description: Каталог автозапчастей, поиск деталей и валидация цен.
+servers:
+  - url: https://api.partsflow.ru/catalog
+  - url: http://catalog-service.internal:8083
+
+paths:
+  /api/v1/products:
+    get:
+      summary: Поиск и фильтрация запчастей (клиентский)
+      tags: [Public Catalog]
+      parameters:
+        - in: query
+          name: query
+          schema: { type: string }
+          description: Артикул или наименование
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: size
+          schema: { type: integer, default: 20 }
+      responses:
+        '200':
+          description: Список товаров с пагинацией
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+
+  /internal/v1/products/{id}:
+    get:
+      summary: Получить снапшот цен и статуса товара (внутренний)
+      tags: [internal]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Актуальная цена и статус детали
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductInternal'
+        '404':
+          description: Товар не найден
+
+components:
+  schemas:
+    ProductPage:
+      type: object
+      required: [items, totalElements, totalPages, currentPage]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductItem'
+        totalElements: { type: integer, example: 142 }
+        totalPages: { type: integer, example: 8 }
+        currentPage: { type: integer, example: 1 }
+
+    ProductItem:
+      type: object
+      required: [id, sku, title, brand, price]
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string, example: "P85020" }
+        title: { type: string, example: "Колодки тормозные" }
+        brand: { type: string, example: "Brembo" }
+        price: { type: number, example: 4500.00 }
+
+    ProductInternal:
+      type: object
+      required: [id, price, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        price: { type: number, example: 4500.00 }
+        isActive: { type: boolean, example: true }
